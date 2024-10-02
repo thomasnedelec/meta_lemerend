@@ -1,0 +1,136 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+install.packages("stringr", repos = "https://cloud.r-project.org", quiet=TRUE)
+
+library(stringr)
+
+install.packages("tidyverse", repos = "https://cloud.r-project.org", quiet=TRUE,dependencies=TRUE)
+
+library(meta)
+library(dplyr)
+library(ggplot2)
+
+```
+
+
+
+```{r}
+df <- read.csv("temp/df_5_10_final.csv", 
+               header = TRUE,
+               na.strings=c("","NA"),    
+               sep = ",")
+df
+```
+
+```{r}
+nb_features <- nrow(df)
+headers <- c("final_name", "code", "nb_total", "odd_ratio", "low_odd_ratio", "high_odd_ratio","p_value")
+result_meta_analysis <- as.data.frame(matrix(, ncol = 7, nrow = 0))
+names(result_meta_analysis) <- headers
+
+# Niveau de significativité ajusté pour les comparaisons multiples
+alpha_adjusted <- 0.05 / nb_features
+z_value <- qnorm(1 - alpha_adjusted / 2)  # Valeur critique pour le seuil ajusté
+
+for (row in 1:nrow(df)) {
+    std_fr <- df[row,'std_FR']
+    coeff_fr <- df[row,'coeff_FR']
+    std_sw <- df[row,'std_SW']
+    coeff_sw <- df[row,'coeff_SW']
+    nb_total <- (df[row,'n_SW']+df[row,'n_FR'])/2
+    studies <- c('fr','sw')
+    print(df[row,'final_name'])
+    print(studies)
+    coeffs <- c(coeff_fr,coeff_sw)
+    print(coeffs)
+    std <- c(std_fr,std_sw)
+    print(std)
+    data_studies <- data.frame(studies,coeffs,std)
+    
+    # Méta-analyse avec la méthode DL pour l'intervalle de confiance
+    metaanalyse <- metagen(data_studies$coeffs, data_studies$std, method.tau = "DL")
+    
+    final_name <- df[row, 'final_name']
+    code <- df[row, 'code']
+    
+    odd_ratio <- exp(metaanalyse$TE.random)
+    
+    # Appliquer la correction de Bonferroni sur l'intervalle de confiance
+    low_odd_ratio <- exp(metaanalyse$TE.random - z_value * metaanalyse$seTE.random)
+    high_odd_ratio <- exp(metaanalyse$TE.random + z_value * metaanalyse$seTE.random)
+    
+     # Récupérer la p-value directement à partir de l'objet metagen
+    p_value <- metaanalyse$pval.random
+    
+    de <- data.frame(final_name, code, nb_total, odd_ratio, low_odd_ratio, high_odd_ratio,p_value)
+    names(de) <- headers
+    
+    result_meta_analysis <- rbind(result_meta_analysis, de)
+}
+
+# Export des résultats
+write.csv(result_meta_analysis, 'temp/result_meta_analysis_R_5_10.csv')
+result_meta_analysis
+
+```
+
+
+```{r}
+nb_features <- nrow(df)
+headers <- c("final_name", "code", "nb_total", "odd_ratio", "low_odd_ratio", "high_odd_ratio","p_value")
+result_meta_analysis <- as.data.frame(matrix(, ncol = 7, nrow = 0))
+names(result_meta_analysis) <- headers
+
+for (row in 1:nrow(df)) {
+    std_fr <- df[row,'std_FR']
+    coeff_fr <- df[row,'coeff_FR']
+    std_sw <- df[row,'std_SW']
+    coeff_sw <- df[row,'coeff_SW']
+    nb_total <- (df[row,'n_SW']+df[row,'n_FR'])/2
+    studies <- c('fr','sw')
+    print(df[row,'final_name'])
+    print(studies)
+    coeffs <- c(coeff_fr,coeff_sw)
+    print(coeffs)
+    std <- c(std_fr,std_sw)
+    print(std)
+    data_studies <- data.frame(studies,coeffs,std)
+    
+    # Méta-analyse avec la méthode HK pour l'intervalle de confiance
+    metaanalyse <- metagen(data_studies$coeffs, data_studies$std, method.tau = "SJ", method.random.ci = "HK")
+    
+    final_name <- df[row, 'final_name']
+    code <- df[row, 'code']
+    
+    odd_ratio <- exp(metaanalyse$TE.random)
+    low_odd_ratio <- exp(metaanalyse$lower.random)  # Borne inférieure de l'IC
+    high_odd_ratio <- exp(metaanalyse$upper.random)  # Borne supérieure de l'IC
+    
+     # Récupérer la p-value directement à partir de l'objet metagen
+    p_value <- metaanalyse$pval.random
+    
+    de <- data.frame(final_name, code, nb_total, odd_ratio, low_odd_ratio, high_odd_ratio,p_value)
+    names(de) <- headers
+    
+    result_meta_analysis <- rbind(result_meta_analysis, de)
+}
+
+# Export des résultats
+write.csv(result_meta_analysis, 'temp/result_meta_analysis_R_5_10.csv')
+result_meta_analysis
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
